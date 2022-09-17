@@ -1,0 +1,66 @@
+name: Compile Sketch
+
+# The workflow will run on every push and pull request to the repository
+on:
+  - push
+  - pull_request
+
+env:
+  SKETCHES_REPORTS_PATH: sketches-reports
+  SKETCHES_REPORTS_ARTIFACT_NAME: sketches-reports
+jobs:
+  compile-sketch:
+    runs-on: ubuntu-latest
+
+    steps:
+      # This step makes the contents of the repository available to the workflow
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Create dummy config for build
+        run: |
+          cd ./src/door-control
+          cp arduino_config.h.sample arduino_config.h
+          cd -
+
+      # For more information: https://github.com/arduino/compile-sketches#readme
+      - name: Compile sketch
+        uses: arduino/compile-sketches@v1
+        with:
+          fqbn: esp8266:esp8266:d1_mini_pro
+          platforms: |
+            - name: "esp8266:esp8266"
+              source-url: "http://arduino.esp8266.com/stable/package_esp8266com_index.json"
+          sketch-paths: |
+            - src/door-control
+          libraries: |
+            - name: "ArduinoMqttClient"
+              version: "0.1.6"
+            - name: "ArduinoLog"
+              version: "1.1.1"
+          enable-deltas-report: "true"
+          sketches-report-path: ${{ env.SKETCHES_REPORTS_PATH }}
+
+      # This step is needed to pass the size data to the report job 
+      - name: Upload sketches report to workflow artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ env.SKETCHES_REPORTS_ARTIFACT_NAME }}
+          path: ${{ env.SKETCHES_REPORTS_PATH }}
+
+  # When using a matrix to compile for multiple boards, it's necessary to use a separate job for the deltas report
+  report:
+    needs: compile-sketch  # Wait for the compile job to finish to get the data for the report
+    if: github.event_name == 'pull_request' # Only run the job when the workflow is triggered by a pull request
+    runs-on: ubuntu-latest
+    steps:
+      # This step is needed to get the size data produced by the compile jobs
+      - name: Download sketches reports artifact
+        uses: actions/download-artifact@v2
+        with:
+          name: ${{ env.SKETCHES_REPORTS_ARTIFACT_NAME }}
+          path: ${{ env.SKETCHES_REPORTS_PATH }}
+
+      - uses: arduino/report-size-deltas@v1
+        with:
+          sketches-reports-source: ${{ env.SKETCHES_REPORTS_PATH }}
