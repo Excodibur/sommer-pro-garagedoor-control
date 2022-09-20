@@ -8,7 +8,7 @@ It connects to an MQTT broker and listens on one topic `<device-name>/comand` to
 | Topic | Values | Description |
 |-------|--------|-------------|
 |`<device-name>/command`| `open`, `close` | Trigger the door to open/close. |
-|`<device-name>/isclosed` | `open`, `closed` | Current status of the door. |
+|`<device-name>/isclosed` | `true`, `false` | Current status of the door. |
 
 ## Board
 Please refer to the [board design description](board/README.md) for more information about the board. This repo contains all files required to print/assemble it yourself.

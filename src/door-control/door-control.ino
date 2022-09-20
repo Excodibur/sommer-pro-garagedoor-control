@@ -8,27 +8,24 @@
    License: MIT
 
    Software for Lolin D1 mini pro based Garage door opener.
-
-   See also:
-
 */
 
-// Define NodeMCU D3 pin to as temperature data pin of  DHT11
-//#define DHT11_PIN D3
 #define PIN_SWITCH_S1 4 // 5 //OUTPUT: Door command - open
 #define PIN_SWITCH_S2 5 // 4 //OUTPUT: Door command - close
 #define PIN_SWITCH_S3 0 //INPUT: closure state
 
-const char ssid[] = SECRET_SSID;
-const char pass[] = SECRET_PASS;
+String wifiSsid = SECRET_SSID;
+String wifiPass = SECRET_PASS;
 
-const char broker[] = MQTT_BROKER_HOST;
-int port = MQTT_BROKER_PORT;
+String brokerHost = MQTT_BROKER_HOST;
+int brokerPort = MQTT_BROKER_PORT;
+String brokerUsername = MQTT_BROKER_USER;
+String brokerPassword = MQTT_BROKER_PASSWORD;
 
 String deviceName = DEVICE;
 
-String topic_door_command = deviceName + "/command"; //INPUT: valid values: open/close
-String topic_door_closed  = deviceName + "/isclosed"; //OUTPUT: true (fully closed) / false (open/moving)
+String topicDoorCommand = deviceName + "/command"; //INPUT: valid values: open/close
+String topicDoorClosed  = deviceName + "/isclosed"; //OUTPUT: true (fully closed) / false (open/moving)
 
 int delayBetweenRetriesMs = DELAY_BETWEEN_CONNECTION_RETRIES;
 
@@ -48,7 +45,8 @@ void setup() {
   // attempt to connect to Wifi network:
   connectWifi();
 
-  Log.noticeln("Attempting to connect to the MQTT broker: %s", broker);
+  Log.noticeln("Attempting to connect to the MQTT broker: %s", brokerHost);
+  mqttClient.setUsernamePassword(brokerUsername, brokerPassword);
   connectMqtt();
 
   pinMode(PIN_SWITCH_S1, OUTPUT);
@@ -66,15 +64,15 @@ void setup() {
   mqttClient.onMessage(onMqttMessage);
 
   // Subscrite to IOBroker topics
-  mqttClient.subscribe(topic_door_command);
+  mqttClient.subscribe(topicDoorCommand);
 
   mqttClient.setKeepAliveInterval(2000);
 }
 
 void connectWifi() {
-  Log.noticeln("Attempting to connect to SSID: %s", ssid);
+  Log.noticeln("Attempting to connect to SSID: %s", wifiSsid);
 
-  while (WiFi.begin(ssid, pass) != WL_CONNECTED) {
+  while (WiFi.begin(wifiSsid, wifiPass) != WL_CONNECTED) {
     // failed, retry
     Log.warningln("Could not connect to Wifi network. Retrying...");
     delay(delayBetweenRetriesMs);
@@ -85,7 +83,7 @@ void connectWifi() {
 
 void connectMqtt () {
   while (!mqttClient.connected()) {
-    if (!mqttClient.connect(broker, port)) {
+    if (!mqttClient.connect(brokerHost.c_str(), brokerPort)) {
       // failed, retry again
       Log.warningln("MQTT connection failed! Error code %d. Retrying...", mqttClient.connectError());
     }
@@ -105,25 +103,25 @@ void onMqttMessage(int messageSize) {
 
   Log.traceln("Received a message from topic '%s'. Message size: %d bytes. Message: %s", topic, messageSize, message);
 
-  if (topic.equals(topic_door_command)) {
+  if (topic.equals(topicDoorCommand)) {
     if (message.equals("open")) {
       Log.noticeln("Opening door");
-      switch_s1_setter();
+      setSwitchS1();
     } else if (message.equals("close")) {
       Log.noticeln("Closing door");
-      switch_s2_setter();
+      setSwitchS2();
     } else
       Log.warningln("Received command '%s' on topic '%s', but ignoring it, as it is not supported.", message, topic);
   }
 }
 
-void switch_s1_setter() {
+void setSwitchS1() {
   digitalWrite(PIN_SWITCH_S1, HIGH);
   delay(1000);
   digitalWrite(PIN_SWITCH_S1, LOW);
 }
 
-void switch_s2_setter() {
+void setSwitchS2() {
   digitalWrite(PIN_SWITCH_S2, HIGH);
   delay(1000);
   digitalWrite(PIN_SWITCH_S2, LOW);
@@ -133,9 +131,9 @@ void checkDoorClosureState (bool overwriteState) {
   int closureState = digitalRead(PIN_SWITCH_S3);
   bool isClosed = (closureState == LOW) ? true : false;
   if ((isClosed != doorIsClosed) || (overwriteState)) {
-    String newClosureState = (isClosed) ? "closed" : "open";
+    String newClosureState = (isClosed) ? "true" : "false";
     Log.noticeln("Door closure state changed to '%s'.", newClosureState);
-    writeMqttMessageToTopic(topic_door_closed, newClosureState);
+    writeMqttMessageToTopic(topicDoorClosed, newClosureState);
     doorIsClosed = isClosed;
   }
 }
